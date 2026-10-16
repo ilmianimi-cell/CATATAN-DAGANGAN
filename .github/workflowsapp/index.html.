@@ -1,0 +1,196 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Catatan Dagangan</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f1f5f2;color:#20352a;font:16px Arial,sans-serif}
+header{background:#176b52;color:white;padding:24px 18px;border-radius:0 0 22px 22px}
+main{max-width:650px;margin:auto;padding:16px}
+h1{margin:0 0 8px;font-size:25px}
+h2{font-size:19px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.card,.panel{background:white;padding:15px;border-radius:14px;border:1px solid #e1e9e3}
+.num{font-size:20px;font-weight:bold;margin-top:8px;overflow-wrap:anywhere}
+label{display:block;font-size:14px;margin:12px 0 6px}
+input,select,button{font:inherit;width:100%;padding:12px;border-radius:9px}
+input,select{border:1px solid #ccd8ce;background:white;color:#20352a}
+button{border:0;background:#176b52;color:white;font-weight:bold;margin-top:12px;cursor:pointer}
+.secondary{background:#e5eee8;color:#176b52}
+.danger{background:#fff0ef;color:#a52c24;width:auto;padding:8px}
+.row{display:flex;gap:8px}
+.row>*{min-width:0;flex:1}
+.item{background:white;border:1px solid #dce6de;padding:14px;border-radius:12px;margin:10px 0;overflow-wrap:anywhere}
+.item p{margin:7px 0}
+small{color:#627468}
+footer{font-size:12px;color:#627468;padding:18px 0;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+<h1>🛍️ Catatan Dagangan</h1>
+<div>Catatan pembeli jadi lebih mudah.</div>
+</header>
+<main>
+<div class="stats">
+<div class="card">Total pesanan<div class="num" id="count">0</div></div>
+<div class="card">Total penjualan<div class="num" id="total">Rp0</div></div>
+<div class="card">Belum lunas<div class="num" id="debt">Rp0</div></div>
+<div class="card">Sudah lunas<div class="num" id="paid">Rp0</div></div>
+</div>
+
+<section class="panel">
+<h2>Tambah pembeli</h2>
+<form id="form">
+<label for="name">Nama pembeli *</label>
+<input id="name" required maxlength="100" placeholder="Nama pembeli">
+<label for="wa">Nomor WhatsApp</label>
+<input id="wa" type="tel" maxlength="25" placeholder="08xxxxxxxxxx">
+<label for="goods">Nama barang *</label>
+<input id="goods" required maxlength="100" placeholder="Barang yang dibeli">
+<div class="row">
+<div><label for="qty">Jumlah *</label>
+<input id="qty" type="number" min="1" max="1000000" value="1" required></div>
+<div><label for="price">Harga satuan (Rp) *</label>
+<input id="price" type="number" min="0" max="1000000000000" step="1" required placeholder="10000"></div>
+</div>
+<label for="payment">Pembayaran</label>
+<select id="payment">
+<option>Belum bayar</option>
+<option>DP</option>
+<option>Sudah bayar</option>
+</select>
+<label for="status">Status pesanan</label>
+<select id="status">
+<option>Menunggu</option>
+<option>Diproses</option>
+<option>Selesai</option>
+</select>
+<button type="submit">＋ Simpan pembeli</button>
+</form>
+</section>
+
+<h2>Daftar pembeli</h2>
+<input id="search" placeholder="🔎 Cari nama atau barang...">
+<div id="list"></div>
+<button class="secondary" id="export">Unduh cadangan data (JSON)</button>
+<footer>
+Data tersimpan di browser perangkat ini. Unduh cadangan secara berkala.
+Jangan bagikan file cadangan karena berisi informasi pembeli.
+</footer>
+</main>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const key="catatan-dagangan-v1";
+let records=[];
+try {
+ const saved=localStorage.getItem(key);
+ if(saved){
+  const parsed=JSON.parse(saved);
+  if(Array.isArray(parsed)) records=parsed.filter(x=>
+   x&&typeof x.id==="string"&&typeof x.name==="string"&&
+   typeof x.goods==="string"&&Number.isFinite(x.price)&&
+   Number.isFinite(x.qty)&&["Belum bayar","DP","Sudah bayar"].includes(x.payment)&&
+   ["Menunggu","Diproses","Selesai"].includes(x.status));
+ }
+} catch(e) { records=[]; }
+
+const money=n=>"Rp"+Math.round(n).toLocaleString("id-ID");
+function save(){
+ try{
+  localStorage.setItem(key,JSON.stringify(records));
+  return true;
+ }catch(e){
+  alert("Penyimpanan gagal. Unduh cadangan dan kosongkan ruang browser.");
+  return false;
+ }
+}
+function node(tag,text,cls){
+ const el=document.createElement(tag);
+ if(text!==undefined)el.textContent=text;
+ if(cls)el.className=cls;
+ return el;
+}
+function render(){
+ $("count").textContent=records.length;
+ $("total").textContent=money(records.reduce((s,r)=>s+r.qty*r.price,0));
+ $("debt").textContent=money(records.filter(r=>r.payment!=="Sudah bayar").reduce((s,r)=>s+r.qty*r.price,0));
+ $("paid").textContent=money(records.filter(r=>r.payment==="Sudah bayar").reduce((s,r)=>s+r.qty*r.price,0));
+ const list=$("list");list.replaceChildren();
+ const q=$("search").value.toLocaleLowerCase("id");
+ const filtered=records.filter(r=>(r.name+" "+r.wa+" "+r.goods).toLocaleLowerCase("id").includes(q));
+ if(!filtered.length){list.append(node("p","Belum ada data yang cocok.",""));return}
+ filtered.slice().reverse().forEach(r=>{
+  const item=node("article",undefined,"item");
+  item.append(node("strong",r.name));
+  item.append(node("p",r.wa||"Nomor WA belum diisi"));
+  item.append(node("p",r.goods+" × "+r.qty));
+  item.append(node("p","Total: "+money(r.qty*r.price)));
+  const pay=node("select");
+  ["Belum bayar","DP","Sudah bayar"].forEach(v=>{
+   const o=node("option",v);o.value=v;pay.append(o);
+  });
+  pay.value=r.payment;
+  pay.setAttribute("aria-label","Status pembayaran "+r.name);
+  pay.addEventListener("change",()=>{
+   r.payment=pay.value;if(save())render();
+  });
+  item.append(node("label","Pembayaran"));item.append(pay);
+  const st=node("select");
+  ["Menunggu","Diproses","Selesai"].forEach(v=>{
+   const o=node("option",v);o.value=v;st.append(o);
+  });
+  st.value=r.status;
+  st.setAttribute("aria-label","Status pesanan "+r.name);
+  st.addEventListener("change",()=>{r.status=st.value;if(save())render()});
+  item.append(node("label","Status pesanan"));item.append(st);
+  if(r.wa){
+   const wa=node("button","Hubungi WhatsApp","secondary");
+   wa.addEventListener("click",()=>{
+    let number=r.wa.replace(/\D/g,"");
+    if(number.startsWith("0"))number="62"+number.slice(1);
+    if(number)location.href="https://wa.me/"+number;
+   });
+   item.append(wa);
+  }
+  const del=node("button","Hapus catatan","danger");
+  del.addEventListener("click",()=>{
+   if(confirm("Hapus catatan "+r.name+"?")){
+    const old=records;records=records.filter(x=>x.id!==r.id);
+    if(!save())records=old;
+    render();
+   }
+  });
+  item.append(del);list.append(item);
+ });
+}
+$("form").addEventListener("submit",e=>{
+ e.preventDefault();
+ const name=$("name").value.trim(),goods=$("goods").value.trim();
+ const qty=Number($("qty").value),price=Number($("price").value);
+ if(!name||!goods||!Number.isSafeInteger(qty)||qty<1||
+    !Number.isSafeInteger(price)||price<0){
+  alert("Periksa nama, barang, jumlah, dan harga.");return;
+ }
+ records.push({id:Date.now()+"-"+Math.random().toString(36).slice(2),
+ name,wa:$("wa").value.trim(),goods,qty,price,
+ payment:$("payment").value,status:$("status").value});
+ if(save()){$("form").reset();$("qty").value="1";render();}
+ else records.pop();
+});
+$("search").addEventListener("input",render);
+$("export").addEventListener("click",()=>{
+ const blob=new Blob([JSON.stringify(records,null,2)],{type:"application/json"});
+ const url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download="cadangan-catatan-dagangan.json";a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+render();
+</script>
+</body>
+</html>
