@@ -1,0 +1,462 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(
+        RepositoriesMode.FAIL_ON_PROJECT_REPOS
+    )
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "CatatanDagangan"
+include(":app")
+File 2 — build.gradle
+
+groovy
+plugins {
+    id 'com.android.application' version '8.7.3' apply false
+}
+File 3 — app/build.gradle
+
+groovy
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'id.dagangan.catatan'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'id.dagangan.catatan'
+        minSdk 23
+        targetSdk 28
+        versionCode 1
+        versionName '1.0'
+    }
+}
+File 4 — app/src/main/AndroidManifest.xml
+
+xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:label="Catatan Dagangan"
+        android:allowBackup="false"
+        android:supportsRtl="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+File 5 — app/src/main/java/id/dagangan/catatan/MainActivity.java
+Ini kode utama aplikasi. Kode berikut membuat formulir pembeli, daftar pesanan, pencarian, pengelolaan status, dan penyimpanan lokal.
+
+
+java
+package id.dagangan.catatan;
+
+import android.app.Activity;
+import android.os.Bundle;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.Rect;
+import android.content.*;
+import android.text.*;
+import android.view.*;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.*;
+import org.json.*;
+import java.text.NumberFormat;
+import java.util.Locale;
+
+public class MainActivity extends Activity {
+    LinearLayout daftar;
+    TextView ringkasan;
+    EditText nama, wa, barang, jumlah, harga, cari;
+    Spinner pembayaran, pesanan;
+    JSONArray data = new JSONArray();
+    SharedPreferences pref;
+    int hijau = Color.rgb(23,107,82);
+
+    String[] opsiBayar = {
+        "Belum bayar", "DP", "Sudah bayar"
+    };
+    String[] opsiPesanan = {
+        "Menunggu", "Diproses", "Selesai"
+    };
+
+    int dp(int n) {
+        return (int)(n * getResources()
+            .getDisplayMetrics().density + 0.5f);
+    }
+
+    String rupiah(double n) {
+        return NumberFormat.getCurrencyInstance(
+            new Locale("id","ID")
+        ).format(n);
+    }
+
+    TextView teks(String s, int ukuran) {
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setTextSize(ukuran);
+        t.setTextColor(Color.rgb(35,45,40));
+        return t;
+    }
+
+    EditText input(String hint, int tipe) {
+        EditText e = new EditText(this);
+        e.setSingleLine(true);
+        e.setHint(hint);
+        e.setTextSize(15);
+        e.setInputType(tipe);
+        e.setPadding(dp(12), dp(8), dp(12), dp(8));
+        return e;
+    }
+
+    LinearLayout kolom() {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        l.setPadding(dp(16),dp(10),dp(16),dp(10));
+        return l;
+    }
+
+    void jarak(LinearLayout l, View v) {
+        LinearLayout.LayoutParams p =
+            new LinearLayout.LayoutParams(-1,-2);
+        p.bottomMargin = dp(8);
+        l.addView(v,p);
+    }
+
+    Button tombol(String label, Runnable aksi) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setOnClickListener(v -> aksi.run());
+        return b;
+    }
+
+    Spinner spinner(String[] opsi) {
+        Spinner s = new Spinner(this);
+        ArrayAdapter<String> a = new ArrayAdapter<>(
+            this, android.R.layout.simple_spinner_item, opsi
+        );
+        a.setDropDownViewResource(
+            android.R.layout.simple_spinner_dropdown_item
+        );
+        s.setAdapter(a);
+        return s;
+    }
+
+    @Override
+    public void onCreate(Bundle b) {
+        super.onCreate(b);
+
+        pref = getSharedPreferences("dagangan", MODE_PRIVATE);
+        try {
+            data = new JSONArray(
+                pref.getString("data", "[]")
+            );
+        } catch(Exception e) {
+            data = new JSONArray();
+        }
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout utama = kolom();
+        utama.setPadding(dp(16),dp(20),dp(16),dp(30));
+        utama.setBackgroundColor(Color.rgb(247,249,247));
+        scroll.addView(utama);
+        setContentView(scroll);
+
+        TextView judul = teks("CATATAN DAGANGAN",24);
+        judul.setTypeface(null,Typeface.BOLD);
+        judul.setTextColor(hijau);
+        jarak(utama,judul);
+
+        jarak(utama,teks(
+            "Catat pembeli, pesanan, dan pembayaran",14
+        ));
+
+        ringkasan = teks("",15);
+        ringkasan.setPadding(dp(12),dp(14),dp(12),dp(14));
+        ringkasan.setBackgroundColor(Color.rgb(222,241,231));
+        jarak(utama,ringkasan);
+
+        TextView sub = teks("TAMBAH PEMBELI",18);
+        sub.setTypeface(null,Typeface.BOLD);
+        jarak(utama,sub);
+
+        nama = input("Nama pembeli", android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_WORD);
+        wa = input("Nomor WhatsApp (opsional)",
+            android.text.InputType.TYPE_CLASS_PHONE);
+        barang = input("Nama barang",
+            android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        jumlah = input("Jumlah barang",
+            android.text.InputType.TYPE_CLASS_NUMBER);
+        jumlah.setText("1");
+        harga = input("Harga satuan (Rp)",
+            android.text.InputType.TYPE_CLASS_NUMBER);
+
+        jarak(utama,nama);
+        jarak(utama,wa);
+        jarak(utama,barang);
+        jarak(utama,jumlah);
+        jarak(utama,harga);
+
+        jarak(utama,teks("Status pembayaran",14));
+        pembayaran = spinner(opsiBayar);
+        jarak(utama,pembayaran);
+
+        jarak(utama,teks("Status pesanan",14));
+        pesanan = spinner(opsiPesanan);
+        jarak(utama,pesanan);
+
+        Button tambah = tombol("＋ SIMPAN PEMBELI", () -> simpan());
+        tambah.setTextColor(Color.WHITE);
+        tambah.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(hijau)
+        );
+        jarak(utama,tambah);
+
+        TextView label = teks("DAFTAR PEMBELI",18);
+        label.setTypeface(null,Typeface.BOLD);
+        label.setPadding(0,dp(20),0,dp(5));
+        jarak(utama,label);
+
+        cari = input("Cari nama, nomor, atau barang...",
+            android.text.InputType.TYPE_CLASS_TEXT);
+        jarak(utama,cari);
+
+        daftar = kolom();
+        daftar.setPadding(0,dp(5),0,0);
+        utama.addView(daftar);
+
+        cari.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(
+                CharSequence s,int st,int c,int a) {}
+            public void onTextChanged(
+                CharSequence s,int st,int before,int count) {
+                tampilkan();
+            }
+            public void afterTextChanged(Editable e) {}
+        });
+
+        tampilkan();
+    }
+
+    void simpan() {
+        String n = nama.getText().toString().trim();
+        String w = wa.getText().toString().trim();
+        String br = barang.getText().toString().trim();
+        String j = jumlah.getText().toString().trim();
+        String h = harga.getText().toString().trim();
+
+        if(n.isEmpty() || br.isEmpty() ||
+           j.isEmpty() || h.isEmpty()) {
+            Toast.makeText(this,
+                "Isi nama, barang, jumlah, dan harga!",
+                Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        try {
+            int qty = Integer.parseInt(j);
+            long price = Long.parseLong(h);
+
+            if(qty < 1 || price < 0) throw new Exception();
+
+            JSONObject o = new JSONObject();
+            o.put("nama",n);
+            o.put("wa",w);
+            o.put("barang",br);
+            o.put("jumlah",qty);
+            o.put("harga",price);
+            o.put("bayar",pembayaran.getSelectedItem().toString());
+            o.put("status",pesanan.getSelectedItem().toString());
+
+            data.put(o);
+            simpanData();
+
+            nama.setText("");
+            wa.setText("");
+            barang.setText("");
+            jumlah.setText("1");
+            harga.setText("");
+            pembayaran.setSelection(0);
+            pesanan.setSelection(0);
+
+            ((InputMethodManager)getSystemService(
+                INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(
+                    nama.getWindowToken(),0);
+
+            tampilkan();
+            Toast.makeText(this,"Pembeli berhasil disimpan!",
+                Toast.LENGTH_SHORT).show();
+        } catch(Exception e) {
+            Toast.makeText(this,"Jumlah atau harga tidak valid.",
+                Toast.LENGTH_LONG).show();
+        }
+    }
+
+    void simpanData() {
+        pref.edit().putString("data",data.toString()).apply();
+    }
+
+    void tampilkan() {
+        if(daftar == null) return;
+
+        double total = 0, tagihan = 0;
+        for(int i=0;i<data.length();i++) {
+            JSONObject o = data.optJSONObject(i);
+            if(o == null) continue;
+            double t = o.optDouble("harga") *
+                o.optInt("jumlah");
+            total += t;
+            if(!"Sudah bayar".equals(o.optString("bayar")))
+                tagihan += t;
+        }
+
+        ringkasan.setText(
+            "Jumlah pesanan: "+data.length()+
+            "\nTotal penjualan: "+rupiah(total)+
+            "\nBelum lunas: "+rupiah(tagihan)
+        );
+
+        daftar.removeAllViews();
+        String q = cari == null ? "" :
+            cari.getText().toString().toLowerCase(
+                Locale.ROOT).trim();
+        int ditemukan = 0;
+
+        for(int i=data.length()-1;i>=0;i--) {
+            final int index = i;
+            JSONObject o = data.optJSONObject(i);
+            if(o == null) continue;
+
+            String n=o.optString("nama");
+            String w=o.optString("wa");
+            String br=o.optString("barang");
+
+            if(!(n+" "+w+" "+br).toLowerCase(
+                Locale.ROOT).contains(q)) continue;
+
+            ditemukan++;
+
+            LinearLayout kartu = kolom();
+            kartu.setBackgroundColor(Color.WHITE);
+
+            TextView info = teks(
+                n+"\n"+(w.isEmpty()?"Tanpa nomor WA":w)+
+                "\nBarang: "+br+
+                "\nJumlah: "+o.optInt("jumlah")+
+                "\nTotal: "+rupiah(
+                    o.optDouble("harga")*o.optInt("jumlah"))+
+                "\nPembayaran: "+o.optString("bayar")+
+                "\nPesanan: "+o.optString("status"),15);
+            info.setTypeface(null,Typeface.BOLD);
+            jarak(kartu,info);
+
+            jarak(kartu,tombol("Ubah pembayaran",()->{
+                JSONObject x=data.optJSONObject(index);
+                if(x==null)return;
+                int next=0;
+                for(int k=0;k<opsiBayar.length;k++)
+                    if(opsiBayar[k].equals(x.optString("bayar")))
+                        next=(k+1)%opsiBayar.length;
+                try{x.put("bayar",opsiBayar[next]);}
+                catch(Exception e){}
+                simpanData();
+                tampilkan();
+            }));
+
+            jarak(kartu,tombol("Ubah status pesanan",()->{
+                JSONObject x=data.optJSONObject(index);
+                if(x==null)return;
+                int next=0;
+                for(int k=0;k<opsiPesanan.length;k++)
+                    if(opsiPesanan[k].equals(x.optString("status")))
+                        next=(k+1)%opsiPesanan.length;
+                try{x.put("status",opsiPesanan[next]);}
+                catch(Exception e){}
+                simpanData();
+                tampilkan();
+            }));
+
+            jarak(kartu,tombol("Hapus pembeli",()->{
+                new android.app.AlertDialog.Builder(this)
+                    .setTitle("Hapus catatan?")
+                    .setMessage("Data pembeli ini akan dihapus.")
+                    .setNegativeButton("Batal",null)
+                    .setPositiveButton("Hapus",(d,which)->{
+                        JSONArray baru=new JSONArray();
+                        for(int k=0;k<data.length();k++)
+                            if(k!=index) baru.put(data.opt(k));
+                        data=baru;
+                        simpanData();
+                        tampilkan();
+                    }).show();
+            }));
+
+            LinearLayout.LayoutParams p =
+                new LinearLayout.LayoutParams(-1,-2);
+            p.bottomMargin=dp(12);
+            daftar.addView(kartu,p);
+        }
+
+        if(ditemukan==0)
+            jarak(daftar,teks(
+                data.length()==0 ?
+                "Belum ada pembeli. Silakan tambahkan." :
+                "Pembeli tidak ditemukan.",14));
+    }
+name: Build Catatan Dagangan APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ambil kode proyek
+        uses: actions/checkout@v4
+
+      - name: Siapkan Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Siapkan Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle assembleDebug
+
+      - name: Simpan APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Catatan-Dagangan-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
